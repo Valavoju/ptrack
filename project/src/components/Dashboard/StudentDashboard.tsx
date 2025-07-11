@@ -1,15 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
-import { Project, WeeklyUpload } from '../../types';
-import { projectAPI, uploadAPI } from '../../services/api';
-import { 
-  FolderOpen, 
-  Upload, 
-  Calendar, 
-  CheckCircle, 
-  Clock, 
-  AlertCircle,
+import { Project, WeeklyUpload, User } from '../../types';
+import { projectAPI, uploadAPI, userAPI } from '../../services/api';
+import {
+  FolderOpen,
+  Upload,
+  CheckCircle,
+  Clock,
   Plus
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -19,14 +17,22 @@ const StudentDashboard: React.FC = () => {
   const [projects, setProjects] = useState<Project[]>([]);
   const [recentUploads, setRecentUploads] = useState<WeeklyUpload[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedProjectType, setSelectedProjectType] = useState('');
+  const [teamSize, setTeamSize] = useState(1);
+  const [teamRollNumbers, setTeamRollNumbers] = useState<string[]>([]);
+  const [verificationStatus, setVerificationStatus] = useState<string[]>([]);
+  const [facultyList, setFacultyList] = useState<User[]>([]);
+  const [selectedMentor, setSelectedMentor] = useState('');
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [projectsResponse] = await Promise.all([
-          projectAPI.getStudentProjects()
+        const [projectsResponse, facultyResponse] = await Promise.all([
+          projectAPI.getStudentProjects(),
+          userAPI.getFacultyList()
         ]);
         setProjects(projectsResponse.data.projects || []);
+        setFacultyList(facultyResponse.data.faculty || []);
       } catch (error) {
         console.error('Error fetching data:', error);
       } finally {
@@ -36,6 +42,26 @@ const StudentDashboard: React.FC = () => {
 
     fetchData();
   }, []);
+
+  const handleRollChange = (index: number, value: string) => {
+    const updatedRolls = [...teamRollNumbers];
+    updatedRolls[index] = value;
+    setTeamRollNumbers(updatedRolls);
+  };
+
+  const verifyRollNumbers = async () => {
+    const results = await Promise.all(
+      teamRollNumbers.map(async (roll) => {
+        try {
+          const response = await projectAPI.verifyRollNumber(roll);
+          return response.data.exists ? '✔️ Verified' : '❌ Not Registered';
+        } catch {
+          return '❌ Error';
+        }
+      })
+    );
+    setVerificationStatus(results);
+  };
 
   const stats = [
     {
@@ -63,6 +89,8 @@ const StudentDashboard: React.FC = () => {
       color: 'bg-purple-500'
     }
   ];
+
+  const weekCards = Array.from({ length: 16 }, (_, i) => i + 1);
 
   if (loading) {
     return (
@@ -95,7 +123,62 @@ const StudentDashboard: React.FC = () => {
         </Link>
       </div>
 
-      {/* Stats Grid */}
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 space-y-4">
+        <label className="block text-sm font-medium text-gray-700 mb-1">Select Project Type</label>
+        <select
+          value={selectedProjectType}
+          onChange={(e) => setSelectedProjectType(e.target.value)}
+          className="w-full border border-gray-300 rounded-lg p-2"
+        >
+          <option value="">-- Select --</option>
+          <option value="Realtime Project">Realtime Project (2nd Year)</option>
+          <option value="Mini Project">Mini Project (3rd Year)</option>
+          <option value="Major Project">Major Project (4th Year)</option>
+        </select>
+
+        <label className="block text-sm font-medium text-gray-700 mb-1">Select Faculty Mentor</label>
+        <select
+          value={selectedMentor}
+          onChange={(e) => setSelectedMentor(e.target.value)}
+          className="w-full border border-gray-300 rounded-lg p-2"
+        >
+          <option value="">-- Select Mentor --</option>
+          {facultyList.map((mentor) => (
+            <option key={mentor._id} value={mentor._id}>{mentor.name}</option>
+          ))}
+        </select>
+
+        <label className="block text-sm font-medium text-gray-700 mb-1">Number of Team Members</label>
+        <input
+          type="number"
+          value={teamSize}
+          onChange={(e) => setTeamSize(Math.min(5, Math.max(1, parseInt(e.target.value))))}
+          min={1}
+          max={5}
+          className="w-full border border-gray-300 rounded-lg p-2"
+        />
+
+        {[...Array(teamSize)].map((_, index) => (
+          <div key={index} className="flex items-center space-x-3 mt-2">
+            <input
+              type="text"
+              placeholder={`Enter Roll No. for Member ${index + 1}`}
+              className="w-full border border-gray-300 rounded-lg p-2"
+              value={teamRollNumbers[index] || ''}
+              onChange={(e) => handleRollChange(index, e.target.value)}
+            />
+            <span className="text-sm text-gray-600">{verificationStatus[index] || ''}</span>
+          </div>
+        ))}
+
+        <button
+          onClick={verifyRollNumbers}
+          className="mt-4 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+        >
+          Verify Team Members
+        </button>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {stats.map((stat, index) => (
           <motion.div
@@ -118,60 +201,15 @@ const StudentDashboard: React.FC = () => {
         ))}
       </div>
 
-      {/* Recent Projects */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-        <div className="p-6 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900">Recent Projects</h2>
-        </div>
-        <div className="p-6">
-          {projects.length === 0 ? (
-            <div className="text-center py-12">
-              <FolderOpen className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No projects yet</h3>
-              <p className="text-gray-600 mb-4">Get started by creating your first project</p>
-              <Link to="/projects/create">
-                <button className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors duration-200">
-                  Create Project
-                </button>
-              </Link>
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">Weekly Schedule</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {weekCards.map(week => (
+            <div key={week} className="border border-gray-200 p-4 rounded-lg">
+              <h3 className="font-semibold text-gray-800 mb-1">Week {week}</h3>
+              <p className="text-sm text-gray-600">Schedule TBD</p>
             </div>
-          ) : (
-            <div className="space-y-4">
-              {projects.slice(0, 3).map((project) => (
-                <motion.div
-                  key={project._id}
-                  className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors duration-200"
-                  whileHover={{ scale: 1.01 }}
-                >
-                  <div className="flex items-center space-x-4">
-                    <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                      <FolderOpen className="w-5 h-5 text-blue-600" />
-                    </div>
-                    <div>
-                      <h3 className="font-medium text-gray-900">{project.title}</h3>
-                      <p className="text-sm text-gray-600">{project.type} Project</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <span className={`px-2 py-1 text-xs rounded-full ${
-                      project.status === 'active' 
-                        ? 'bg-green-100 text-green-800' 
-                        : project.status === 'completed'
-                        ? 'bg-blue-100 text-blue-800'
-                        : 'bg-yellow-100 text-yellow-800'
-                    }`}>
-                      {project.status}
-                    </span>
-                    <Link to={`/projects/${project._id}`}>
-                      <button className="text-blue-600 hover:text-blue-800 text-sm font-medium">
-                        View Details
-                      </button>
-                    </Link>
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-          )}
+          ))}
         </div>
       </div>
     </div>

@@ -10,7 +10,7 @@ const api = axios.create({
   }
 });
 
-// Add auth token to requests
+// Add auth token to every request
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');
   if (token) {
@@ -19,7 +19,7 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Handle auth errors
+// Handle 401 Unauthorized globally
 api.interceptors.response.use(
   (response) => response,
   (error) => {
@@ -31,6 +31,9 @@ api.interceptors.response.use(
   }
 );
 
+// ----------------------------
+// Auth API
+// ----------------------------
 export const authAPI = {
   login: (data: LoginData) => api.post<{ success: boolean; token: string; user: User; message: string }>('/auth/login', data),
   register: (data: RegisterData) => api.post<{ success: boolean; token: string; user: User; message: string }>('/auth/register', data),
@@ -38,6 +41,9 @@ export const authAPI = {
   getFaculty: (branch: string) => api.get<{ success: boolean; faculty: User[] }>(`/auth/faculty/${branch}`)
 };
 
+// ----------------------------
+// Project API
+// ----------------------------
 export const projectAPI = {
   getProjects: () => api.get<{ success: boolean; projects: Project[] }>('/projects'),
   getProjectById: (id: string) => api.get<{ success: boolean; project: Project }>(`/projects/${id}`),
@@ -45,15 +51,26 @@ export const projectAPI = {
   updateProject: (id: string, data: Partial<Project>) => api.put<{ success: boolean; project: Project }>(`/projects/${id}`, data),
   deleteProject: (id: string) => api.delete(`/projects/${id}`),
   getStudentProjects: () => api.get<{ success: boolean; projects: Project[] }>('/projects/student'),
-  getFacultyProjects: () => api.get<{ success: boolean; projects: Project[] }>('/projects/faculty')
+  getFacultyProjects: () => api.get<{ success: boolean; projects: Project[] }>('/projects/faculty'),
+  
+  // ✅ New API for verifying student roll number
+  verifyRollNumber: (roll: string) => api.get<{ exists: boolean }>(`/projects/verify-roll/${roll}`)
 };
 
+// ----------------------------
+// Upload API
+// ----------------------------
 export const uploadAPI = {
   getUploads: (projectId: string) => api.get<{ success: boolean; uploads: WeeklyUpload[] }>(`/uploads/${projectId}`),
   createUpload: (data: FormData) => api.post<{ success: boolean; upload: WeeklyUpload }>('/uploads', data),
   updateUpload: (id: string, data: Partial<WeeklyUpload>) => api.put<{ success: boolean; upload: WeeklyUpload }>(`/uploads/${id}`, data),
   deleteUpload: (id: string) => api.delete(`/uploads/${id}`),
   downloadFile: (filename: string) => api.get(`/uploads/download/${filename}`, { responseType: 'blob' })
+};
+
+// ✅ Optional: Add new export if needed
+export const userAPI = {
+  getFacultyList: () => api.get<{ faculty: User[] }>('/users/faculty')
 };
 
 export default api;

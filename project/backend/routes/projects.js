@@ -6,6 +6,23 @@ const { auth, authorize, checkProjectAccess } = require('../middleware/auth');
 
 const router = express.Router();
 
+// Verify roll number route
+router.get('/verify-roll/:roll', auth, async (req, res) => {
+  try {
+    const roll = req.params.roll;
+    const student = await User.findOne({ rollNumber: roll, role: 'student' });
+
+    if (student) {
+      res.json({ exists: true });
+    } else {
+      res.json({ exists: false });
+    }
+  } catch (error) {
+    console.error('Roll verification error:', error);
+    res.status(500).json({ exists: false });
+  }
+});
+
 // @route   GET /api/projects
 // @desc    Get all projects (admin only)
 // @access  Private (Admin)
@@ -134,7 +151,6 @@ router.post('/', auth, authorize('student'), [
 
     const { title, abstract, type, mentor, description, technologies, objectives, githubUrl, deploymentUrl } = req.body;
 
-    // Verify mentor exists and is from same branch
     const mentorUser = await User.findById(mentor);
     if (!mentorUser) {
       return res.status(400).json({
@@ -157,7 +173,6 @@ router.post('/', auth, authorize('student'), [
       });
     }
 
-    // Check if student already has a project of this type
     const existingProject = await Project.findOne({
       student: req.user._id,
       type: type,
@@ -171,7 +186,6 @@ router.post('/', auth, authorize('student'), [
       });
     }
 
-    // Create project
     const project = new Project({
       title,
       abstract,
@@ -222,15 +236,13 @@ router.put('/:id', auth, checkProjectAccess, [
       });
     }
 
-    const updateData = { ...req.body };
-    
-    // Remove fields that shouldn't be updated
+    let updateData = { ...req.body };
+
     delete updateData.student;
     delete updateData.mentor;
     delete updateData.type;
     delete updateData.branch;
 
-    // Faculty can only update certain fields
     if (req.user.role === 'faculty') {
       const allowedFields = ['feedback', 'grade', 'status'];
       const filteredData = {};
@@ -268,7 +280,6 @@ router.put('/:id', auth, checkProjectAccess, [
 // @access  Private (Student/Admin)
 router.delete('/:id', auth, checkProjectAccess, async (req, res) => {
   try {
-    // Only students can delete their own projects or admin can delete any
     if (req.user.role === 'faculty') {
       return res.status(403).json({
         success: false,
